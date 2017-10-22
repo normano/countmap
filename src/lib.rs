@@ -1,12 +1,16 @@
 #![deny(missing_docs)]
 //! A map that helps counting elements.
 
+extern crate num_traits;
+
+use num_traits::identities::{One, Zero};
+
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::hash_map::{Drain, IntoIter, Iter, IterMut, Keys, RandomState, Values};
 use std::hash::{BuildHasher, Hash};
 use std::iter::FromIterator;
-use std::ops::Index;
+use std::ops::{Add, Index};
 
 /// A count map is a hash map where the value field is a constantly incremented counter. If a key
 /// is inserted for the first time, the counter is set to 1. Every subsequent insert will increment
@@ -14,17 +18,19 @@ use std::ops::Index;
 /// almost the complete API of `HashMap` except things like `iter_mut()` or `get_mut()` since it
 /// doesn't make sense in this use case.
 #[derive(Clone, Debug)]
-pub struct CountMap<K, S = RandomState>
+pub struct CountMap<K, C = u64, S = RandomState>
 where
     K: Eq + Hash,
+    // C: Unsigned,
     S: BuildHasher,
 {
-    map: HashMap<K, u64, S>,
+    map: HashMap<K, C, S>,
 }
 
-impl<K> CountMap<K, RandomState>
+impl<K, C> CountMap<K, C, RandomState>
 where
     K: Eq + Hash,
+    // C: Unsigned,
 {
     /// Creates an empty `CountMap`.
     ///
@@ -54,9 +60,10 @@ where
     }
 }
 
-impl<K, S> CountMap<K, S>
+impl<K, C, S> CountMap<K, C, S>
 where
     K: Eq + Hash,
+    C: One + Zero + Copy + Clone + Add<Output = C>,
     S: BuildHasher,
 {
     /// Creates an empty `CountMap` which will use the given hash builder to hash keys.
@@ -73,7 +80,7 @@ where
     /// use countmap::CountMap;
     ///
     /// let s = RandomState::new();
-    /// let mut map = CountMap::with_hasher(s);
+    /// let mut map: CountMap<_, u16> = CountMap::with_hasher(s);
     /// map.insert_or_increment("foo");
     /// ```
     pub fn with_hasher(hash_builder: S) -> Self {
@@ -96,7 +103,7 @@ where
     /// use countmap::CountMap;
     ///
     /// let s = RandomState::new();
-    /// let mut map = CountMap::with_capacity_and_hasher(10, s);
+    /// let mut map: CountMap<_, u16> = CountMap::with_capacity_and_hasher(10, s);
     /// map.insert_or_increment("foo");
     /// ```
     pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
@@ -150,7 +157,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::with_capacity(100);
+    /// let mut map: CountMap<_, u16> = CountMap::with_capacity(100);
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("bar");
     /// assert!(map.capacity() >= 100);
@@ -167,7 +174,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("bar");
     /// map.insert_or_increment("foo");
@@ -176,7 +183,7 @@ where
     ///     println!("{}", key);
     /// }
     /// ```
-    pub fn keys(&self) -> Keys<K, u64> {
+    pub fn keys(&self) -> Keys<K, C> {
         self.map.keys()
     }
 
@@ -186,7 +193,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("bar");
     /// map.insert_or_increment("foo");
@@ -195,12 +202,29 @@ where
     ///     println!("{}", val);
     /// }
     /// ```
-    pub fn values(&self) -> Values<K, u64> {
+    pub fn values(&self) -> Values<K, C> {
         self.map.values()
     }
 
-    /// Inserts or increments an element in the `CountMap`. The new value of the counter is
+    /// Inserts or increments an element by 1 in the `CountMap`. The new value of the counter is
     /// returned.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    ///
+    /// let mut count_map: CountMap<_, u16> = CountMap::new();
+    ///
+    /// assert_eq!(count_map.insert_or_increment("foo"), 1);
+    /// assert_eq!(count_map.insert_or_increment("foo"), 2);
+    /// assert_eq!(count_map.insert_or_increment("bar"), 1);
+    /// ```
+    pub fn insert_or_increment(&mut self, element: K) -> C {
+        self.insert_or_increment_by(element, C::one())
+    }
+
+    /// Inserts or increments an element by the specified difference in the `CountMap`. The new
+    /// value of the counter is returned.
     ///
     /// # Examples
     /// ```
@@ -208,18 +232,20 @@ where
     ///
     /// let mut count_map: CountMap<&str> = CountMap::new();
     ///
-    /// assert_eq!(count_map.insert_or_increment("foo"), 1);
-    /// assert_eq!(count_map.insert_or_increment("foo"), 2);
-    /// assert_eq!(count_map.insert_or_increment("bar"), 1);
+    /// assert_eq!(count_map.insert_or_increment_by("foo", 5), 5);
+    /// assert_eq!(count_map.insert_or_increment_by("foo", 2), 7);
+    /// assert_eq!(count_map.insert_or_increment_by("bar", 1), 1);
     /// ```
-    pub fn insert_or_increment(&mut self, element: K) -> u64 {
-        let count = self.map.entry(element).or_insert(0);
-        *count += 1;
+    pub fn insert_or_increment_by(&mut self, element: K, diff: C) -> C {
+        let count = self.map.entry(element).or_insert(C::zero());
+        // *count += diff;
+        *count = *count + diff;
+        // *count = count.add(diff);
         *count
     }
 
-    /// Increments an existing element in the `CountMap`. Returns an `Option` with the new value of
-    /// the counter or `None` if the element doesn't exist.
+    /// Increments an existing element in the `CountMap` by 1. Returns an `Option` with the new
+    /// value of the counter or `None` if the element doesn't exist.
     ///
     /// # Examples
     /// ```
@@ -233,11 +259,31 @@ where
     ///
     /// assert_eq!(count_map.increment(&"foo"), Some(2));
     /// ```
-    pub fn increment(&mut self, element: &K) -> Option<u64> {
+    pub fn increment(&mut self, element: &K) -> Option<C> {
+        self.increment_by(element, C::one())
+    }
+
+    /// Increments an existing element in the `CountMap` by the specified difference. Returns an
+    /// `Option` with the new value of the counter or `None` if the element doesn't exist.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    ///
+    /// let mut count_map: CountMap<&str> = CountMap::new();
+    ///
+    /// assert_eq!(count_map.increment_by(&"foo", 5), None);
+    ///
+    /// count_map.insert_or_increment(&"foo");
+    ///
+    /// assert_eq!(count_map.increment_by(&"foo", 2), Some(3));
+    /// ```
+    pub fn increment_by(&mut self, element: &K, diff: C) -> Option<C> {
         let entry = self.map.get_mut(element);
         match entry {
             Some(count) => {
-                *count += 1;
+                // *count += diff;
+                *count = *count + diff;
                 Some(*count)
             }
             None => None,
@@ -258,18 +304,18 @@ where
     /// assert_eq!(count_map.get_count(&"foo"), Some(1));
     /// assert_eq!(count_map.get_count(&"bar"), None);
     /// ```
-    pub fn get_count(&self, element: &K) -> Option<u64> {
+    pub fn get_count(&self, element: &K) -> Option<C> {
         self.map.get(element).cloned()
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The iterator element type is
-    /// (&'a K, &'a u64).
+    /// (&'a K, &'a C).
     ///
     /// # Examples
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     ///
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("foo");
@@ -279,7 +325,7 @@ where
     ///     println!("key: {}, count: {}", key, count);
     /// }
     /// ```
-    pub fn iter(&self) -> Iter<K, u64> {
+    pub fn iter(&self) -> Iter<K, C> {
         self.map.iter()
     }
 
@@ -290,7 +336,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     ///
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("foo");
@@ -303,7 +349,7 @@ where
     /// assert_eq!(map.get_count(&"foo"), Some(5));
     /// assert_eq!(map.get_count(&"bar"), Some(4));
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<K, u64> {
+    pub fn iter_mut(&mut self) -> IterMut<K, C> {
         self.map.iter_mut()
     }
 
@@ -313,7 +359,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// assert_eq!(map.len(), 0);
     /// map.insert_or_increment("foo");
     /// assert_eq!(map.len(), 1);
@@ -328,7 +374,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// assert_eq!(map.is_empty(), true);
     /// map.insert_or_increment("foo");
     /// assert_eq!(map.is_empty(), false);
@@ -344,7 +390,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("bar");
     ///
@@ -355,7 +401,7 @@ where
     ///
     /// assert!(map.is_empty());
     /// ```
-    pub fn drain(&mut self) -> Drain<K, u64> {
+    pub fn drain(&mut self) -> Drain<K, C> {
         self.map.drain()
     }
 
@@ -365,7 +411,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<&str, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// map.clear();
     /// assert!(map.is_empty())
@@ -380,7 +426,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<&str, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// assert!(map.contains_key(&"foo"));
     /// assert!(!map.contains_key(&"bar"));
@@ -401,7 +447,7 @@ where
     /// assert_eq!(map.remove(&"foo"), Some(1));
     /// assert_eq!(map.remove(&"bar"), None);
     /// ```
-    pub fn remove(&mut self, k: &K) -> Option<u64> {
+    pub fn remove(&mut self, k: &K) -> Option<C> {
         self.map.remove(k)
     }
 
@@ -413,7 +459,7 @@ where
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("foo");
     /// map.insert_or_increment("foo");
@@ -424,15 +470,16 @@ where
     /// ```
     pub fn retain<F>(&mut self, f: F)
     where
-        F: FnMut(&K, &mut u64) -> bool,
+        F: FnMut(&K, &mut C) -> bool,
     {
         self.map.retain(f)
     }
 }
 
-impl<K> Default for CountMap<K>
+impl<K, C> Default for CountMap<K, C>
 where
     K: Eq + Hash,
+    // C: Unsigned,
 {
     fn default() -> Self {
         Self { map: HashMap::new() }
@@ -454,54 +501,58 @@ where
 {
 }
 
-impl<'a, K> IntoIterator for &'a CountMap<K>
+impl<'a, K, C> IntoIterator for &'a CountMap<K, C>
 where
     K: Eq + Hash,
+    // C: Unsigned,
 {
-    type Item = (&'a K, &'a u64);
-    type IntoIter = Iter<'a, K, u64>;
+    type Item = (&'a K, &'a C);
+    type IntoIter = Iter<'a, K, C>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter()
     }
 }
 
-impl<'a, K> IntoIterator for &'a mut CountMap<K>
+impl<'a, K, C> IntoIterator for &'a mut CountMap<K, C>
 where
     K: Eq + Hash,
+    // C: Unsigned,
 {
-    type Item = (&'a K, &'a mut u64);
-    type IntoIter = IterMut<'a, K, u64>;
+    type Item = (&'a K, &'a mut C);
+    type IntoIter = IterMut<'a, K, C>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter_mut()
     }
 }
 
-impl<'a, K> IntoIterator for CountMap<K>
+impl<'a, K, C> IntoIterator for CountMap<K, C>
 where
     K: Eq + Hash,
+    // C: Unsigned,
 {
-    type Item = (K, u64);
-    type IntoIter = IntoIter<K, u64>;
+    type Item = (K, C);
+    type IntoIter = IntoIter<K, C>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
     }
 }
 
-impl<'a, K, Q> Index<&'a Q> for CountMap<K>
+impl<'a, K, C, Q> Index<&'a Q> for CountMap<K, C>
 where
     K: Eq + Hash + Borrow<Q>,
+    // C: Unsigned,
     Q: ?Sized + Eq + Hash,
 {
-    type Output = u64;
+    type Output = C;
 
     /// # Examples
     /// ```
     /// use countmap::CountMap;
     ///
-    /// let mut map = CountMap::new();
+    /// let mut map: CountMap<_, u16> = CountMap::new();
     ///
     /// map.insert_or_increment("foo");
     /// assert_eq!(map["foo"], 1);
@@ -511,38 +562,155 @@ where
     }
 }
 
-impl<K> FromIterator<(K, u64)> for CountMap<K>
+impl<K, C> FromIterator<(K, C)> for CountMap<K, C>
 where
     K: Eq + Hash,
+    C: Clone + Copy + One + Zero,
 {
+    /// Creates a `CountMap<K>` from an `Iterator<(K, C)>`.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    /// use std::iter::FromIterator;
+    ///
+    /// let data = vec![("foo", 3), ("bar", 3), ("foo", 1)];
+    /// let map = CountMap::from_iter(data);
+    /// assert_eq!(map.get_count(&"foo"), Some(4));
+    /// assert_eq!(map.get_count(&"bar"), Some(3));
+    /// ```
     fn from_iter<T>(iter: T) -> Self
     where
-        T: IntoIterator<Item = (K, u64)>,
+        T: IntoIterator<Item = (K, C)>,
     {
-        Self { map: HashMap::from_iter(iter) }
+        let iter = iter.into_iter();
+        let mut map = CountMap::with_capacity(iter.size_hint().0);
+        for (k, v) in iter {
+            map.insert_or_increment_by(k, v);
+        }
+        map
     }
 }
 
-impl<K> Extend<(K, u64)> for CountMap<K>
+impl<K> FromIterator<K> for CountMap<K>
 where
     K: Eq + Hash,
+{
+    /// Creates a `CountMap<K>` from an `Iterator<K>`.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    /// use std::iter::FromIterator;
+    ///
+    /// let data = vec!["foo", "bar", "foo"];
+    /// let map = CountMap::from_iter(data);
+    /// assert_eq!(map.get_count(&"foo"), Some(2));
+    /// assert_eq!(map.get_count(&"bar"), Some(1));
+    /// ```
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = K>,
+    {
+        let iter = iter.into_iter();
+        let mut map = CountMap::with_capacity(iter.size_hint().0);
+        for item in iter {
+            map.insert_or_increment(item);
+        }
+        map
+    }
+}
+
+impl<K, C> Extend<(K, C)> for CountMap<K, C>
+where
+    K: Eq + Hash,
+    C: Clone + Copy + One + Zero,
+{
+    /// Extends a `CountMap<K>` with an `Iterator<(K, C)>`.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    ///
+    /// let data = vec![("foo", 3), ("bar", 3), ("foo", 1)];
+    /// let mut map = CountMap::new();
+    /// map.extend(data);
+    ///
+    /// assert_eq!(map.get_count(&"foo"), Some(4));
+    /// assert_eq!(map.get_count(&"bar"), Some(3));
+    /// ```
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = (K, C)>,
+    {
+        let iter = iter.into_iter();
+        let reserve = if self.is_empty() {
+            iter.size_hint().0
+        } else {
+            (iter.size_hint().0 + 1) / 2
+        };
+        self.reserve(reserve);
+        for (k, v) in iter {
+            self.insert_or_increment_by(k, v);
+        }
+    }
+}
+
+impl<'a, K, C> Extend<(&'a K, &'a C)> for CountMap<K, C>
+where
+    K: 'a + Eq + Hash + Copy,
+    C: 'a + Clone + Copy + One + Zero,
 {
     fn extend<T>(&mut self, iter: T)
     where
-        T: IntoIterator<Item = (K, u64)>,
+        T: IntoIterator<Item = (&'a K, &'a C)>,
     {
-        self.map.extend(iter)
+        self.extend(iter.into_iter().map(|(&key, &value)| (key, value)));
     }
 }
 
-impl<'a, K> Extend<(&'a K, &'a u64)> for CountMap<K>
+impl<K> Extend<K> for CountMap<K>
+where
+    K: Eq + Hash,
+{
+    /// Extends a `CountMap<K>` with an `Iterator<K>`.
+    ///
+    /// # Examples
+    /// ```
+    /// use countmap::CountMap;
+    ///
+    /// let data = vec!["foo", "bar", "foo"];
+    /// let mut map = CountMap::new();
+    /// map.extend(data);
+    ///
+    /// assert_eq!(map.get_count(&"foo"), Some(2));
+    /// assert_eq!(map.get_count(&"bar"), Some(1));
+    /// ```
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = K>,
+    {
+        let iter = iter.into_iter();
+        let reserve = if self.is_empty() {
+            iter.size_hint().0
+        } else {
+            (iter.size_hint().0 + 1) / 2
+        };
+        self.reserve(reserve);
+        for k in iter {
+            self.insert_or_increment(k);
+        }
+    }
+}
+
+impl<'a, K> Extend<&'a K> for CountMap<K>
 where
     K: 'a + Eq + Hash + Copy,
 {
     fn extend<T>(&mut self, iter: T)
     where
-        T: IntoIterator<Item = (&'a K, &'a u64)>,
+        T: IntoIterator<Item = &'a K>,
     {
-        self.map.extend(iter)
+        self.extend(iter.into_iter().cloned());
     }
 }

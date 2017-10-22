@@ -10,6 +10,7 @@ documentation = "https://docs.rs/countmap"
 description = "Simple map to count occurences of supplied keys"
 
 [dependencies]
+num-traits = "0.1"
 
 [badges]
 travis-ci = { repository = "vbrandl/countmap" }
