@@ -7,7 +7,7 @@ readme = "README.md"
 repository = "https://github.com/vbrandl/countmap"
 homepage = "https://github.com/vbrandl/countmap"
 documentation = "https://docs.rs/countmap"
-description = "Simple countmap"
+description = "Simple map to count occurences of supplied keys"
 
 [dependencies]
 
