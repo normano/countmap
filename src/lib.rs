@@ -309,7 +309,7 @@ where
     }
 
     /// An iterator visiting all key-value pairs in arbitrary order. The iterator element type is
-    /// (&'a K, &'a u64).
+    /// (&'a K, &'a C).
     ///
     /// # Examples
     /// ```
@@ -567,7 +567,7 @@ where
     K: Eq + Hash,
     C: Clone + Copy + One + Zero,
 {
-    /// Creates a `CountMap<K>` from an `Iterator<(K, u64)>`.
+    /// Creates a `CountMap<K>` from an `Iterator<(K, C)>`.
     ///
     /// # Examples
     /// ```
@@ -626,7 +626,7 @@ where
     K: Eq + Hash,
     C: Clone + Copy + One + Zero,
 {
-    /// Extends a `CountMap<K>` with an `Iterator<(K, u64)>`.
+    /// Extends a `CountMap<K>` with an `Iterator<(K, C)>`.
     ///
     /// # Examples
     /// ```
