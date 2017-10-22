@@ -1,12 +1,13 @@
 [package]
 name = "countmap"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Valentin Brandl <vbrandl@riseup.net>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/vbrandl/countmap"
 homepage = "https://github.com/vbrandl/countmap"
 documentation = "https://docs.rs/countmap"
+description = "Simple map to count occurences of supplied keys"
 
 [dependencies]
 
