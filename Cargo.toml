@@ -1,6 +1,6 @@
 [package]
 name = "countmap"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Valentin Brandl <vbrandl@riseup.net>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -10,6 +10,7 @@ documentation = "https://docs.rs/countmap"
 description = "Simple map to count occurences of supplied keys"
 
 [dependencies]
+num-traits = "0.1"
 
 [badges]
 travis-ci = { repository = "vbrandl/countmap" }
