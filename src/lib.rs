@@ -21,7 +21,6 @@ use std::ops::{Add, Index};
 pub struct CountMap<K, C = u64, S = RandomState>
 where
     K: Eq + Hash,
-    // C: Unsigned,
     S: BuildHasher,
 {
     map: HashMap<K, C, S>,
@@ -30,7 +29,6 @@ where
 impl<K, C> CountMap<K, C, RandomState>
 where
     K: Eq + Hash,
-    // C: Unsigned,
 {
     /// Creates an empty `CountMap`.
     ///
@@ -63,7 +61,7 @@ where
 impl<K, C, S> CountMap<K, C, S>
 where
     K: Eq + Hash,
-    C: One + Zero + Copy + Clone + Add<Output = C>,
+    C: One + Zero + Copy + Add<Output = C>,
     S: BuildHasher,
 {
     /// Creates an empty `CountMap` which will use the given hash builder to hash keys.
@@ -237,10 +235,8 @@ where
     /// assert_eq!(count_map.insert_or_increment_by("bar", 1), 1);
     /// ```
     pub fn insert_or_increment_by(&mut self, element: K, diff: C) -> C {
-        let count = self.map.entry(element).or_insert(C::zero());
-        // *count += diff;
+        let count = self.map.entry(element).or_insert_with(C::zero);
         *count = *count + diff;
-        // *count = count.add(diff);
         *count
     }
 
@@ -282,7 +278,6 @@ where
         let entry = self.map.get_mut(element);
         match entry {
             Some(count) => {
-                // *count += diff;
                 *count = *count + diff;
                 Some(*count)
             }
@@ -479,7 +474,6 @@ where
 impl<K, C> Default for CountMap<K, C>
 where
     K: Eq + Hash,
-    // C: Unsigned,
 {
     fn default() -> Self {
         Self { map: HashMap::new() }
@@ -504,7 +498,6 @@ where
 impl<'a, K, C> IntoIterator for &'a CountMap<K, C>
 where
     K: Eq + Hash,
-    // C: Unsigned,
 {
     type Item = (&'a K, &'a C);
     type IntoIter = Iter<'a, K, C>;
@@ -517,7 +510,6 @@ where
 impl<'a, K, C> IntoIterator for &'a mut CountMap<K, C>
 where
     K: Eq + Hash,
-    // C: Unsigned,
 {
     type Item = (&'a K, &'a mut C);
     type IntoIter = IterMut<'a, K, C>;
@@ -530,7 +522,6 @@ where
 impl<'a, K, C> IntoIterator for CountMap<K, C>
 where
     K: Eq + Hash,
-    // C: Unsigned,
 {
     type Item = (K, C);
     type IntoIter = IntoIter<K, C>;
@@ -543,7 +534,6 @@ where
 impl<'a, K, C, Q> Index<&'a Q> for CountMap<K, C>
 where
     K: Eq + Hash + Borrow<Q>,
-    // C: Unsigned,
     Q: ?Sized + Eq + Hash,
 {
     type Output = C;
@@ -565,7 +555,7 @@ where
 impl<K, C> FromIterator<(K, C)> for CountMap<K, C>
 where
     K: Eq + Hash,
-    C: Clone + Copy + One + Zero,
+    C: Copy + One + Zero,
 {
     /// Creates a `CountMap<K>` from an `Iterator<(K, C)>`.
     ///
@@ -624,7 +614,7 @@ where
 impl<K, C> Extend<(K, C)> for CountMap<K, C>
 where
     K: Eq + Hash,
-    C: Clone + Copy + One + Zero,
+    C: Copy + One + Zero,
 {
     /// Extends a `CountMap<K>` with an `Iterator<(K, C)>`.
     ///
@@ -659,7 +649,7 @@ where
 impl<'a, K, C> Extend<(&'a K, &'a C)> for CountMap<K, C>
 where
     K: 'a + Eq + Hash + Copy,
-    C: 'a + Clone + Copy + One + Zero,
+    C: 'a + Copy + One + Zero,
 {
     fn extend<T>(&mut self, iter: T)
     where
