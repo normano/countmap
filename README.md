@@ -8,7 +8,8 @@
 Implementation of a count map in Rust. A map that holds a counter as a
 value, that gets incremented each time the key is added to the map.
 This implementation simply decorates the HashMap from the Rust std
-library.
+library. To provide a generic counter (any number type should work)
+some traits from the `num-traits` crate are used.
 
 [Documentation](https://docs.rs/countmap)
 
@@ -18,7 +19,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-countmap = "0.1"
+countmap = "0.2"
 ```
 
 Next, add this to your crate root:
@@ -30,9 +31,15 @@ extern crate countmap;
 Now you can use a count map in your code:
 
 ```rust
+extern crate countmap;
+use countmap::CountMap;
+
 fn main() {
-	let map = countmap::CountMap::new();
+	let map: CountMap<_, u16> = CountMap::new();
 	map.insert_or_increment("foo");
+	map.insert_or_increment("foo");
+	map.insert_or_increment("foo");
+	assert_eq!(map.get_count(&"foo"), Some(3));
 }
 ```
 
